@@ -78,7 +78,11 @@ namespace FixedBankTabs
             buttons[1] = __instance._storageTabButton_01;
             buttons[2] = __instance._storageTabButton_02;
 
-            float offset = buttons[1].transform.localPosition.x - buttons[0].transform.localPosition.x;
+            RectTransform rect0 = buttons[0].GetComponent<RectTransform>();
+            RectTransform rect1 = buttons[1].GetComponent<RectTransform>();
+            RectTransform rect2 = buttons[2].GetComponent<RectTransform>();
+
+            float offset = (rect1.anchoredPosition.x - rect0.anchoredPosition.x);
 
             int lastSiblingIndex = buttons[buttons.Length - 1].transform.GetSiblingIndex();
 
@@ -87,9 +91,12 @@ namespace FixedBankTabs
                 Button orig = buttons[i % 3];
                 GameObject origObject = orig.gameObject;
                 newButtons[i] = GameObject.Instantiate(origObject,
-                                                       buttons[2].transform.position + new Vector3(offset*(i+1), 0f, 0f),
+                                                       buttons[2].transform.position,
                                                        origObject.transform.rotation,
                                                        origObject.transform.parent).GetComponent<Button>();
+                RectTransform buttonRect = newButtons[i].GetComponent<RectTransform>();
+                buttonRect.anchoredPosition = rect2.anchoredPosition + new Vector2(offset * (i + 1), 0f);
+
                 Button currentButton = newButtons[i];
                 currentButton.transform.SetSiblingIndex(lastSiblingIndex + 1);
                 lastSiblingIndex++;
