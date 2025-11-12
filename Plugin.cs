@@ -1,7 +1,8 @@
-﻿using BepInEx;
+﻿
+using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
-using MyFirstPlugin;
+using MoreBankTabs;
 
 namespace FixedBankTabs
 {
@@ -22,6 +23,11 @@ namespace FixedBankTabs
             patcher = new Harmony("FixedMoreBankTabs");
             patcher.PatchAll(typeof(BankPatches));
             Logger.LogInfo("Done!");
+
+            Logger.LogInfo("Registering Assets...");
+
+            AssetHandler.GetAssetBundle("morebanktabs");
+
 
             Logger.LogInfo("Initializing Extra Data...");
             BankPatches.init();

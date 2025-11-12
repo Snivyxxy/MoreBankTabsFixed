@@ -1,9 +1,13 @@
 ﻿using FixedBankTabs;
 using HarmonyLib;
+using JetBrains.Annotations;
+using MoreBankTabs;
+using SnivysUI;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.Audio;
 using UnityEngine.UI;
 using static UnityEngine.UI.Button;
 
@@ -12,26 +16,27 @@ namespace FixedBankTabs
     public static class BankPatches
     {
         static int BASENUMOFBUTTONS = 3;
-        public static int EXTRANUMOFTABS = 6;
+        static int MAXPAGES = 100;
 
-        static Button[] newButtons;
-        static List<ItemData>[] newItemDatas;
-        static int[][] newStorageSizes;
-        static ItemStorage_Profile[] newItemStorageProfiles;
+        class BankTabData
+        {
+            public BankTabData()
+            {
+                ItemDatas = new List<ItemData>();
+                StorageSizes = new int[3];
+                ItemStorageProfile = new ItemStorage_Profile();
+            }
+            public List<ItemData> ItemDatas;
+            public int[] StorageSizes;
+            public ItemStorage_Profile ItemStorageProfile;
+        }
+
+
+        static Dictionary<int,BankTabData> BankTabs;
 
         public static void init()
         {
-            newButtons = new Button[EXTRANUMOFTABS];
-            newItemDatas = new List<ItemData>[EXTRANUMOFTABS];
-            newStorageSizes = new int[EXTRANUMOFTABS][];
-            newItemStorageProfiles = new ItemStorage_Profile[EXTRANUMOFTABS];
-            for(int i = 0; i < EXTRANUMOFTABS; i++)
-            {
-                newStorageSizes[i] = new int[3];
-                newItemDatas[i] = new List<ItemData>();
-                newItemStorageProfiles[i] = new ItemStorage_Profile();
-                newItemStorageProfiles[i]._heldItemStorage = new ItemData[0];
-            }
+            BankTabs = new Dictionary<int,BankTabData>();
         }
 
 
@@ -56,13 +61,12 @@ namespace FixedBankTabs
             {
                 Plugin.Logger.LogInfo("index is " + index);
                 instance._selectedStorageTab = index;
-                instance._storageTabHighlight.transform.position = newButtons[index - BASENUMOFBUTTONS].transform.GetChild(0).position;
             }
         }
 
         static bool CheckOutOfBounds(int index)
         {
-            if (index < BASENUMOFBUTTONS || index >= BASENUMOFBUTTONS + EXTRANUMOFTABS)
+            if (index < BASENUMOFBUTTONS)
             {
                 return true;
             }
@@ -78,39 +82,64 @@ namespace FixedBankTabs
             buttons[1] = __instance._storageTabButton_01;
             buttons[2] = __instance._storageTabButton_02;
 
-            RectTransform rect0 = buttons[0].GetComponent<RectTransform>();
-            RectTransform rect1 = buttons[1].GetComponent<RectTransform>();
-            RectTransform rect2 = buttons[2].GetComponent<RectTransform>();
+            GameObject PageSelector = GameObject.Instantiate(AssetHandler.FetchFromBundle<GameObject>("morebanktabs", "LeftRightTextbox"), buttons[0].transform.parent);
+            
+            RectTransform PSRect = PageSelector.GetComponent<RectTransform>();
 
-            float offset = (rect1.anchoredPosition.x - rect0.anchoredPosition.x);
+            LeftRightTextbox handler = PageSelector.GetComponent<LeftRightTextbox>();
 
-            int lastSiblingIndex = buttons[buttons.Length - 1].transform.GetSiblingIndex();
+            PageSelector.transform.SetSiblingIndex(0);
 
-            for (int i = 0; i < EXTRANUMOFTABS; i++)
+            __instance._storageTabHighlight.gameObject.SetActive(false);
+
+            PSRect.anchoredPosition = new Vector2(0, -150);
+
+
+            AudioMixerGroup mixer = buttons[0].GetComponent<AudioSource>().outputAudioMixerGroup;
+            AudioSource[] auds = PageSelector.GetComponentsInChildren<AudioSource>();
+
+            foreach (AudioSource aud in auds)
             {
-                Button orig = buttons[i % 3];
-                GameObject origObject = orig.gameObject;
-                newButtons[i] = GameObject.Instantiate(origObject,
-                                                       buttons[2].transform.position,
-                                                       origObject.transform.rotation,
-                                                       origObject.transform.parent).GetComponent<Button>();
-                RectTransform buttonRect = newButtons[i].GetComponent<RectTransform>();
-                buttonRect.anchoredPosition = rect2.anchoredPosition + new Vector2(offset * (i + 1), 0f);
-
-                Button currentButton = newButtons[i];
-                currentButton.transform.SetSiblingIndex(lastSiblingIndex + 1);
-                lastSiblingIndex++;
-
-                Image buttonImage = currentButton.GetComponentInChildren<Image>();
-                buttonImage.color += new Color(0.35f, 0f, 0.1f);
-
-                ButtonClickedEvent currentClick = currentButton.onClick;
-                currentClick.RemoveAllListeners();
-                int index = i + BASENUMOFBUTTONS;
-                currentClick.AddListener(delegate { SetStorageTab(__instance, index); });
-                currentClick.AddListener(__instance.Clear_StorageEntries);
-                currentClick.AddListener(__instance.Init_StorageListing);
+                aud.outputAudioMixerGroup = mixer;
             }
+
+            foreach (Button b in buttons)
+            {
+                b.gameObject.SetActive(false);
+            }
+
+
+            ButtonClickedEvent left =  handler.GetOnLeftClick();
+            ButtonClickedEvent right =  handler.GetOnRightClick();
+
+            handler.SetText(String.Format("Page {0} / {1}", __instance._selectedStorageTab + 1, MAXPAGES));
+
+            left.RemoveAllListeners();
+            right.RemoveAllListeners();
+            
+            left.AddListener(delegate
+            {
+                if (__instance._selectedStorageTab > 0)
+                {
+                    SetStorageTab(__instance, __instance._selectedStorageTab - 1);
+                }
+                handler.SetText(String.Format("Page {0} / {1}", __instance._selectedStorageTab+1, MAXPAGES));
+            });
+            right.AddListener(delegate
+            {
+                if(__instance._selectedStorageTab < MAXPAGES)
+                {
+                    SetStorageTab(__instance, __instance._selectedStorageTab + 1);
+                }
+                handler.SetText(String.Format("Page {0} / {1}",__instance._selectedStorageTab+1, MAXPAGES));
+            });
+
+            left.AddListener(__instance.Clear_StorageEntries);
+            right.AddListener(__instance.Clear_StorageEntries);
+
+            left.AddListener(__instance.Init_StorageListing);
+            right.AddListener(__instance.Init_StorageListing);
+
 
 
 
@@ -124,8 +153,11 @@ namespace FixedBankTabs
             {
                 return true;
             }
+            
+            
+
             ItemData[] items = null;
-            items = newItemDatas[__instance._selectedStorageTab - BASENUMOFBUTTONS].ToArray();
+            items = BankTabs[__instance._selectedStorageTab].ItemDatas.ToArray();
             for (int i = 0; i < items.Length; i++)
             {
                 ItemData itemData = items[i];
@@ -135,7 +167,6 @@ namespace FixedBankTabs
                     __instance.Create_StorageEntry(itemData, scriptableItem, i, itemData._slotNumber);
                 }
             }
-
             return false;
         }
 
@@ -143,14 +174,11 @@ namespace FixedBankTabs
         [HarmonyPrefix]
         static bool CreateStorageEntryPatch(ItemStorageManager __instance, ItemData _itemData, ScriptableItem _scriptItem, int _index, int _slotNumber)
         {
-
-
-
-            if (CheckOutOfBounds(__instance._selectedStorageTab))
+            if(CheckOutOfBounds(__instance._selectedStorageTab))
             {
                 return true;
             }
-            int offsetIndex = __instance._selectedStorageTab - BASENUMOFBUTTONS;
+            
             if (!GameManager._current.Locate_Item(_itemData._itemName))
             {
                 return false;
@@ -160,11 +188,13 @@ namespace FixedBankTabs
                 _itemData._modifierID = 0;
             }
 
-            if (newStorageSizes[offsetIndex][(int)_scriptItem._itemType] >= 48)
+            BankTabData currentTab = BankTabs[__instance._selectedStorageTab];
+
+            if (currentTab.StorageSizes[(int)_scriptItem._itemType] >= 48)
             {
                 return false;
             }
-            newStorageSizes[offsetIndex][(int)_scriptItem._itemType]++;
+            currentTab.StorageSizes[(int)_scriptItem._itemType]++;
 
             GameObject gameObject = GameObject.Instantiate<GameObject>(__instance._storageEntryPrefab);
             ItemListDataEntry itementry = gameObject.GetComponent<ItemListDataEntry>();
@@ -200,15 +230,14 @@ namespace FixedBankTabs
             {
                 return true;
             }
-            int offsetIndex = __instance._selectedStorageTab - BASENUMOFBUTTONS;
             ScriptableItem scriptableItem = GameManager._current.Locate_Item(_itemData._itemName);
             if (!scriptableItem)
             {
                 return false;
             }
-
-            newItemDatas[offsetIndex].Remove(_itemData);
-            newStorageSizes[offsetIndex][(int)scriptableItem._itemType]--;
+            BankTabData currentTab = BankTabs[__instance._selectedStorageTab];
+            currentTab.ItemDatas.Remove(_itemData);
+            currentTab.StorageSizes[(int)scriptableItem._itemType]--;
 
             for (int i = 0; i < __instance._storageListEntries.Count; i++)
             {
@@ -226,21 +255,22 @@ namespace FixedBankTabs
         [HarmonyPostfix]
         static void UpdatePatch(ItemStorageManager __instance)
         {
-            int offsetIndex = __instance._selectedStorageTab - BASENUMOFBUTTONS;
 
             if (__instance._isOpen)
             {
-                if (!CheckOutOfBounds(__instance._selectedStorageTab))
+                if (!CheckOutOfBounds(__instance._selectedStorageTab) && BankTabs.ContainsKey(__instance._selectedStorageTab))
                 {
-                    __instance._counter_gearItemSize.text = string.Format("{0}/48", newStorageSizes[offsetIndex][0]);
-                    __instance._counter_consumableItemSize.text = string.Format("{0}/48", newStorageSizes[offsetIndex][1]);
-                    __instance._counter_tradeItemSize.text = string.Format("{0}/48", newStorageSizes[offsetIndex][2]);
+                    BankTabData currentTab = BankTabs[__instance._selectedStorageTab];
+                    __instance._counter_gearItemSize.text = string.Format("{0}/48", currentTab.StorageSizes[0]);
+                    __instance._counter_consumableItemSize.text = string.Format("{0}/48", currentTab.StorageSizes[1]);
+                    __instance._counter_tradeItemSize.text = string.Format("{0}/48", currentTab.StorageSizes[2]);
                 }
-
+                /*
                 for (int i = 0; i < EXTRANUMOFTABS; i++)
                 {
                     newButtons[i].interactable = __instance._selectedStorageTab - BASENUMOFBUTTONS != i;
                 }
+                */
                 __instance.Handle_TabVisibility();
                 return;
             }
@@ -251,13 +281,48 @@ namespace FixedBankTabs
         [HarmonyPostfix]
         static void LoadItemStorageDataPatch(ProfileDataManager __instance)
         {
+            foreach(string path in Directory.GetFiles(__instance._dataPath, "atl_itemBank_*"))
+            {
+                /*
+                Plugin.Logger.LogInfo(Path.GetFileName(path).Substring(13));
+                Plugin.Logger.LogInfo(Path.GetFileName(path));
+                Plugin.Logger.LogInfo(int.TryParse(Path.GetFileName(path).Substring(13), out int test));
+                Plugin.Logger.LogInfo(test);
+                */
+
+                
+
+                if (int.TryParse(Path.GetFileName(path).Substring(13),out int n))
+                {
+                    if(n < BASENUMOFBUTTONS)
+                    {
+                        continue;
+                    }
+                    BankTabs[n] = new BankTabData();
+                    BankTabData currentTab = BankTabs[n];
+
+                    ItemStorage_Profile itemStorageProfile = JsonUtility.FromJson<ItemStorage_Profile>(File.ReadAllText(path));
+                    currentTab.ItemStorageProfile = itemStorageProfile;
+                    currentTab.ItemDatas = [.. currentTab.ItemStorageProfile._heldItemStorage];
+                }
+            }
+
+            if(ItemStorageManager._current)
+            {
+                ItemStorageManager ism = ItemStorageManager._current;
+                if(!(CheckOutOfBounds(ism._selectedStorageTab) || BankTabs.ContainsKey(ism._selectedStorageTab)))
+                {
+                    BankTabs[ism._selectedStorageTab] = new BankTabData();
+                }
+            }
+            /*
             for(int i = 0; i < EXTRANUMOFTABS; i++)
             {
                 string path = Path.Combine(__instance._dataPath, "atl_itemBank_" + (i+BASENUMOFBUTTONS).ToString("00"));
                 if (File.Exists(path))
                 {
                     ItemStorage_Profile itemStorageProfile = JsonUtility.FromJson<ItemStorage_Profile>(File.ReadAllText(path));
-                    newItemStorageProfiles[i] = itemStorageProfile;
+                    ItemStorageProfiles[i] = itemStorageProfile;
                 }
                 else
                 {
@@ -279,14 +344,36 @@ namespace FixedBankTabs
                 newStorageSizes[i][2] = 0;
                 newItemDatas[i].Clear();
                 newItemDatas[i].AddRange(newItemStorageProfiles[i]._heldItemStorage);
-            }
+            }*/
         }
 
         [HarmonyPatch(typeof(ProfileDataManager), "Save_ItemStorageData")]
         [HarmonyPostfix]
         static void SaveItemStorageDataPatch(ProfileDataManager __instance)
         {
+            foreach(KeyValuePair<int,BankTabData> kv in BankTabs)
+            {
+                string path = Path.Combine(__instance._dataPath, "atl_itemBank_" + (kv.Key).ToString("00"));
+                BankTabData currentTab = kv.Value;
+                currentTab.ItemStorageProfile._heldItemStorage = currentTab.ItemDatas.ToArray();
+                
+                if(currentTab.ItemStorageProfile._heldItemStorage.Length == 0)
+                {
+                    
+                    if(File.Exists(path))
+                    {
+                        File.Delete(path);
+                    }
+                }
+                else
+                {
+                    string contents = JsonUtility.ToJson(currentTab.ItemStorageProfile, true);
+                    File.WriteAllText(path, contents);
+                }
+                    
+            }
 
+            /*
             for (int i = 0; i < EXTRANUMOFTABS; i++)
             {
 
@@ -299,6 +386,7 @@ namespace FixedBankTabs
                 string contents = JsonUtility.ToJson(newItemStorageProfiles[i],true);
                 File.WriteAllText(path,contents);
             }
+            */
         }
 
         [HarmonyPrefix]
@@ -310,16 +398,15 @@ namespace FixedBankTabs
             {
                 return true;
             }
-            int offsetIndex = ism._selectedStorageTab - BASENUMOFBUTTONS;
 
             if (__instance._entryType != ItemListEntryType.INVENTORY)
             {
                 return false;
             }
 
+            BankTabData currentTab = BankTabs[ism._selectedStorageTab];
 
-
-            if (newStorageSizes[offsetIndex][(int)__instance._scriptableItem._itemType] >= 48)
+            if (currentTab.StorageSizes[(int)__instance._scriptableItem._itemType] >= 48)
             {
                 ErrorPromptTextManager.current.Init_ErrorPrompt("Storage Full");
                 __instance.Relocate_ToOriginSlot();
@@ -345,7 +432,7 @@ namespace FixedBankTabs
 
             ism._commandBuffer = 0.25f;
             ism.Create_StorageEntry(__instance._itemData, __instance._scriptableItem, ItemStorageManager._current._storageListEntries.Count, _setItemSlot);
-            newItemDatas[offsetIndex].Add(__instance._itemData);
+            currentTab.ItemDatas.Add(__instance._itemData);
             Player._mainPlayer._pInventory.Remove_Item(__instance._itemData, 0);
             __instance.Init_SaveProfiles();
             ProfileDataManager._current.Save_ItemStorageData();

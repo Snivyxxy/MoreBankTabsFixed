@@ -20,3 +20,11 @@ C:\Users\account\OneDrive\Desktop\FixedBankTabs\bin\Debug\netstandard2.1\kcp2k.d
 C:\Users\account\OneDrive\Desktop\FixedBankTabs\obj\Debug\netstandard2.1\MyFirstPlugin.csproj.CopyComplete
 C:\Users\account\OneDrive\Desktop\FixedBankTabs\obj\Debug\netstandard2.1\MoreBankTabsFixed.dll
 C:\Users\account\OneDrive\Desktop\FixedBankTabs\obj\Debug\netstandard2.1\MoreBankTabsFixed.pdb
+C:\Users\Wynter\Desktop\Game Mods\Atlyss\MoreBankTabs\obj\Debug\netstandard2.1\MyFirstPlugin.csproj.AssemblyReference.cache
+C:\Users\Wynter\Desktop\Game Mods\Atlyss\MoreBankTabs\obj\Debug\netstandard2.1\MyPluginInfo.cs
+C:\Users\Wynter\Desktop\Game Mods\Atlyss\MoreBankTabs\obj\Debug\netstandard2.1\MyFirstPlugin.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Wynter\Desktop\Game Mods\Atlyss\MoreBankTabs\obj\Debug\netstandard2.1\MyFirstPlugin.AssemblyInfoInputs.cache
+C:\Users\Wynter\Desktop\Game Mods\Atlyss\MoreBankTabs\obj\Debug\netstandard2.1\MyFirstPlugin.AssemblyInfo.cs
+C:\Users\Wynter\Desktop\Game Mods\Atlyss\MoreBankTabs\obj\Debug\netstandard2.1\MyFirstPlugin.csproj.CoreCompileInputs.cache
+C:\Users\Wynter\Desktop\Game Mods\Atlyss\MoreBankTabs\obj\Debug\netstandard2.1\MoreBankTabsFixed.dll
+C:\Users\Wynter\Desktop\Game Mods\Atlyss\MoreBankTabs\obj\Debug\netstandard2.1\MoreBankTabsFixed.pdb
