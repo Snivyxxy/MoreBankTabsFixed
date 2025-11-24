@@ -15,7 +15,6 @@ namespace FixedBankTabs
 {
     public static class BankPatches
     {
-        static int BASENUMOFBUTTONS = 3;
         static int MAXPAGES = 100;
 
         class BankTabData
@@ -31,7 +30,7 @@ namespace FixedBankTabs
             public ItemStorage_Profile ItemStorageProfile;
         }
 
-
+        static LeftRightTextbox texthandler;
         static Dictionary<int,BankTabData> BankTabs;
 
         public static void init()
@@ -42,28 +41,9 @@ namespace FixedBankTabs
 
         static void SetStorageTab(ItemStorageManager instance, int index)
         {
-            if (index < 3)
-            {
-                if (index < 1)
-                {
-                    instance.SetStorageTab_00();
-                }
-                else if (index < 2)
-                {
-                    instance.SetStorageTab_01();
-                }
-                else
-                {
-                    instance.SetStorageTab_02();
-                }
-            }
-            else
-            {
-                Plugin.Logger.LogInfo("index is " + index);
-                instance._selectedStorageTab = index;
-            }
+            instance._selectedStorageTab = index;
         }
-
+        /*
         static bool CheckOutOfBounds(int index)
         {
             if (index < BASENUMOFBUTTONS)
@@ -72,30 +52,28 @@ namespace FixedBankTabs
             }
             return false;
         }
-
+        */
         [HarmonyPatch(typeof(ItemStorageManager), "Awake")]
         [HarmonyPostfix]
         private static void StorageManagerAwakePatch(ItemStorageManager __instance)
         {
-            Button[] buttons = new Button[BASENUMOFBUTTONS];
-            buttons[0] = __instance._storageTabButton_00;
-            buttons[1] = __instance._storageTabButton_01;
-            buttons[2] = __instance._storageTabButton_02;
+            Transform buttonParent = __instance._storageTabButton_00.transform.parent;
 
-            GameObject PageSelector = GameObject.Instantiate(AssetHandler.FetchFromBundle<GameObject>("morebanktabs", "LeftRightTextbox"), buttons[0].transform.parent);
+
+            GameObject PageSelector = GameObject.Instantiate(AssetHandler.FetchFromBundle<GameObject>("morebanktabs", "LeftRightTextbox"), buttonParent.parent);
             
             RectTransform PSRect = PageSelector.GetComponent<RectTransform>();
 
-            LeftRightTextbox handler = PageSelector.GetComponent<LeftRightTextbox>();
+            texthandler = PageSelector.GetComponent<LeftRightTextbox>();
 
             PageSelector.transform.SetSiblingIndex(0);
 
             __instance._storageTabHighlight.gameObject.SetActive(false);
 
-            PSRect.anchoredPosition = new Vector2(0, -150);
+            PSRect.anchoredPosition = new Vector2(0f, -200);
 
 
-            AudioMixerGroup mixer = buttons[0].GetComponent<AudioSource>().outputAudioMixerGroup;
+            AudioMixerGroup mixer = __instance._aSrc_switchStorageTab.outputAudioMixerGroup;
             AudioSource[] auds = PageSelector.GetComponentsInChildren<AudioSource>();
 
             foreach (AudioSource aud in auds)
@@ -103,16 +81,11 @@ namespace FixedBankTabs
                 aud.outputAudioMixerGroup = mixer;
             }
 
-            foreach (Button b in buttons)
-            {
-                b.gameObject.SetActive(false);
-            }
 
+            ButtonClickedEvent left = texthandler.GetOnLeftClick();
+            ButtonClickedEvent right = texthandler.GetOnRightClick();
 
-            ButtonClickedEvent left =  handler.GetOnLeftClick();
-            ButtonClickedEvent right =  handler.GetOnRightClick();
-
-            handler.SetText(String.Format("Page {0} / {1}", __instance._selectedStorageTab + 1, MAXPAGES));
+            texthandler.SetText(String.Format("Page {0} / {1}", __instance._selectedStorageTab + 1, MAXPAGES));
 
             left.RemoveAllListeners();
             right.RemoveAllListeners();
@@ -123,7 +96,7 @@ namespace FixedBankTabs
                 {
                     SetStorageTab(__instance, __instance._selectedStorageTab - 1);
                 }
-                handler.SetText(String.Format("Page {0} / {1}", __instance._selectedStorageTab+1, MAXPAGES));
+                texthandler.SetText(String.Format("Page {0} / {1}", __instance._selectedStorageTab+1, MAXPAGES));
             });
             right.AddListener(delegate
             {
@@ -131,7 +104,7 @@ namespace FixedBankTabs
                 {
                     SetStorageTab(__instance, __instance._selectedStorageTab + 1);
                 }
-                handler.SetText(String.Format("Page {0} / {1}",__instance._selectedStorageTab+1, MAXPAGES));
+                texthandler.SetText(String.Format("Page {0} / {1}",__instance._selectedStorageTab+1, MAXPAGES));
             });
 
             left.AddListener(__instance.Clear_StorageEntries);
@@ -149,10 +122,6 @@ namespace FixedBankTabs
         [HarmonyPrefix]
         static bool BeginStorageListingPatch(ItemStorageManager __instance)
         {
-            if (CheckOutOfBounds(__instance._selectedStorageTab))
-            {
-                return true;
-            }
             
             
 
@@ -162,7 +131,7 @@ namespace FixedBankTabs
             {
                 ItemData itemData = items[i];
                 ScriptableItem scriptableItem = GameManager._current.Locate_Item(itemData._itemName);
-                if (itemData._quantity > 0 && scriptableItem)
+                if (itemData._quantity > 0 && scriptableItem && !scriptableItem._scriptableQuest)
                 {
                     __instance.Create_StorageEntry(itemData, scriptableItem, i, itemData._slotNumber);
                 }
@@ -174,10 +143,6 @@ namespace FixedBankTabs
         [HarmonyPrefix]
         static bool CreateStorageEntryPatch(ItemStorageManager __instance, ItemData _itemData, ScriptableItem _scriptItem, int _index, int _slotNumber)
         {
-            if(CheckOutOfBounds(__instance._selectedStorageTab))
-            {
-                return true;
-            }
             
             if (!GameManager._current.Locate_Item(_itemData._itemName))
             {
@@ -226,10 +191,6 @@ namespace FixedBankTabs
         [HarmonyPrefix]
         static bool DeleteStorageEntryPatch(ItemStorageManager __instance, ItemData _itemData)
         {
-            if (CheckOutOfBounds(__instance._selectedStorageTab))
-            {
-                return true;
-            }
             ScriptableItem scriptableItem = GameManager._current.Locate_Item(_itemData._itemName);
             if (!scriptableItem)
             {
@@ -258,7 +219,7 @@ namespace FixedBankTabs
 
             if (__instance._isOpen)
             {
-                if (!CheckOutOfBounds(__instance._selectedStorageTab) && BankTabs.ContainsKey(__instance._selectedStorageTab))
+                if (BankTabs.ContainsKey(__instance._selectedStorageTab))
                 {
                     BankTabData currentTab = BankTabs[__instance._selectedStorageTab];
                     __instance._counter_gearItemSize.text = string.Format("{0}/48", currentTab.StorageSizes[0]);
@@ -272,6 +233,11 @@ namespace FixedBankTabs
                 }
                 */
                 __instance.Handle_TabVisibility();
+                if (texthandler)
+                {
+
+                    texthandler.SetText(String.Format("Page {0} / {1}", __instance._selectedStorageTab + 1, MAXPAGES));
+                }
                 return;
             }
         }
@@ -281,7 +247,10 @@ namespace FixedBankTabs
         [HarmonyPostfix]
         static void LoadItemStorageDataPatch(ProfileDataManager __instance)
         {
-            foreach(string path in Directory.GetFiles(__instance._dataPath, "atl_itemBank_*"))
+
+
+
+            foreach (string path in Directory.GetFiles(__instance._dataPath, "atl_itemBank_*"))
             {
                 /*
                 Plugin.Logger.LogInfo(Path.GetFileName(path).Substring(13));
@@ -294,10 +263,6 @@ namespace FixedBankTabs
 
                 if (int.TryParse(Path.GetFileName(path).Substring(13),out int n))
                 {
-                    if(n < BASENUMOFBUTTONS)
-                    {
-                        continue;
-                    }
                     BankTabs[n] = new BankTabData();
                     BankTabData currentTab = BankTabs[n];
 
@@ -306,11 +271,20 @@ namespace FixedBankTabs
                     currentTab.ItemDatas = [.. currentTab.ItemStorageProfile._heldItemStorage];
                 }
             }
+            {
+                //why must you do this kiseff
+                BankTabs[0] = new BankTabData();
+                BankTabData currentTab = BankTabs[0];
 
-            if(ItemStorageManager._current)
+                ItemStorage_Profile itemStorageProfile = JsonUtility.FromJson<ItemStorage_Profile>(File.ReadAllText(Path.Combine(__instance._dataPath, "atl_itemBank")));
+                currentTab.ItemStorageProfile = itemStorageProfile;
+                currentTab.ItemDatas = [.. currentTab.ItemStorageProfile._heldItemStorage];
+            }
+
+            if (ItemStorageManager._current)
             {
                 ItemStorageManager ism = ItemStorageManager._current;
-                if(!(CheckOutOfBounds(ism._selectedStorageTab) || BankTabs.ContainsKey(ism._selectedStorageTab)))
+                if(!BankTabs.ContainsKey(ism._selectedStorageTab))
                 {
                     BankTabs[ism._selectedStorageTab] = new BankTabData();
                 }
@@ -357,7 +331,7 @@ namespace FixedBankTabs
                 BankTabData currentTab = kv.Value;
                 currentTab.ItemStorageProfile._heldItemStorage = currentTab.ItemDatas.ToArray();
                 
-                if(currentTab.ItemStorageProfile._heldItemStorage.Length == 0)
+                if(currentTab.ItemStorageProfile._heldItemStorage.Length == 0 && kv.Key < 7)
                 {
                     
                     if(File.Exists(path))
@@ -394,10 +368,6 @@ namespace FixedBankTabs
         static bool PutItemIntoStoragePatch(ItemListDataEntry __instance, int _setItemSlot)
         {
             ItemStorageManager ism = ItemStorageManager._current;
-            if (CheckOutOfBounds(ism._selectedStorageTab))
-            {
-                return true;
-            }
 
             if (__instance._entryType != ItemListEntryType.INVENTORY)
             {
